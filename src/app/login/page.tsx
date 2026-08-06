@@ -9,7 +9,7 @@ export default function LoginPage() {
     const [error, setError] = useState("");
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-[#D9EAFD]">
+        <main className="flex min-h-screen items-center justify-center bg-[#F6F4EB]">
             <div className="w-[420px] rounded-3xl border border-black/30 bg-white/10 p-8 backdrop-blur-xl">
                 <h1 className="text-center text-[30px] text-black font-semibold">
                     Login
