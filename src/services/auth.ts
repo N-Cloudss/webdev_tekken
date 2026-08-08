@@ -5,16 +5,26 @@ import {
 } from "firebase/auth";
 
 import { auth } from "@/lib/firebase";
+import { createUserProfile } from "./user";
 
 export async function register(
+    name: string,
     email: string,
     password: string
 ) {
-    return createUserWithEmailAndPassword(
+    const result = await createUserWithEmailAndPassword(
         auth,
         email,
         password
     );
+
+    await createUserProfile(
+        result.user.uid,
+        name,
+        email
+    );
+        
+    return result;
 }
 
 export async function login(

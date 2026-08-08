@@ -37,7 +37,7 @@ export default function RegisterPage() {
             setLoading(true);
             setError("");
 
-            await register(email, password);
+            await register(name, email, password);
 
             router.push("/login");
         } catch (err: any) {
