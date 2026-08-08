@@ -39,7 +39,7 @@ export default function RegisterPage() {
 
             await register(name, email, password);
 
-            router.push("/login");
+            router.push("/");
         } catch (err: any) {
             switch (err.code) {
                 case "auth/email-already-in-use":
