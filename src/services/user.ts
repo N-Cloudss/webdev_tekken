@@ -1,4 +1,4 @@
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export async function createUserProfile(
@@ -11,4 +11,14 @@ export async function createUserProfile(
         email,
         createdAt: serverTimestamp(),
     });
+}
+
+export async function getUserProfile(uid: string) {
+    const userDoc = await getDoc(doc(db, "users", uid));
+
+    if(!userDoc.exists()) {
+        return null;
+    }
+
+    return userDoc.data();
 }
