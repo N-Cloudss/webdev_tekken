@@ -95,7 +95,7 @@ export default function Navbar() {
                                     </Link>
 
                                     <Link 
-                                        href="/dashboard"
+                                        href="/client"
                                         onClick={() => setDropdownOpen(false)}
                                         className="flex items-center gap-2 rounded-md px-[7px] py-2 font-semibold text-[#D9EAFD] transition-all duration-300 hover:translate-x-[1px] hover:-translate-y-[1px] hover:bg-[#4682A9] hover:text-white"
                                     >
