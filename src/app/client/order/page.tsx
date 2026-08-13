@@ -1,26 +1,62 @@
 "use client";
 
 import { useState } from "react";
+import { auth } from "@/lib/firebase";
+import { uploadSTL } from "@/services/storage";
+
+type Pricing = {
+    filamentPricePerGram: number;
+    filamentCost: number;
+    printingFee: number;
+    totalPrice: number;
+};
+
+type SliceResult = {
+    filamentUsedGrams: number;
+    pricing: Pricing;
+};
+
+type SliceResponse = {
+    success: boolean;
+    filamentUsedGrams?: number;
+    pricing?: Pricing;
+    error?: string;
+};
+
+type OrderResponse = {
+    success: boolean;
+    orderId?: string;
+    error?: string;
+};
 
 export default function ClientOrder() {
     const [file, setFile] = useState<File | null>(null);
 
-    const [infill, setInfill] = useState("20");
-    const [layerHeight, setLayerHeight] = useState("0.20");
-    const [wallThickness, setWallThickness] = useState("0.8");
-    const [filament, setFilament] = useState("PLA");
+    const [infill, setInfill] = useState<string>("20");
+    const [layerHeight, setLayerHeight] =
+        useState<string>("0.20");
+    const [wallThickness, setWallThickness] =
+        useState<string>("0.8");
+    const [filament, setFilament] =
+        useState<string>("PLA");
 
-    const [result, setResult] = useState<any>(null);
-    const [loading, setLoading] = useState(false);
+    const [sliceResult, setSliceResult] =
+        useState<SliceResult | null>(null);
 
-    const handleSlice = async () => {
+    const [isSlicing, setIsSlicing] =
+        useState<boolean>(false);
+
+    const [isOrdering, setIsOrdering] =
+        useState<boolean>(false);
+
+    const handleSlice = async (): Promise<void> => {
         if (!file) {
             alert("Please select an STL file.");
             return;
         }
 
-        setLoading(true);
-        setResult(null);
+        setIsSlicing(true);
+        setSliceResult(null);
 
         const formData = new FormData();
 
@@ -36,19 +72,138 @@ export default function ClientOrder() {
                 body: formData,
             });
 
-            const data = await response.json();
+            const data: SliceResponse =
+                await response.json();
 
-            if (!response.ok) {
-                alert(data.error || "Failed to slice STL.");
+            if (!response.ok || !data.success) {
+                alert(
+                    data.error ||
+                        "Failed to slice STL."
+                );
                 return;
             }
 
-            setResult(data);
-        } catch (error) {
+            if (
+                data.filamentUsedGrams === undefined ||
+                !data.pricing
+            ) {
+                alert(
+                    "Invalid response from slicing API."
+                );
+                return;
+            }
+
+            setSliceResult({
+                filamentUsedGrams:
+                    data.filamentUsedGrams,
+                pricing: data.pricing,
+            });
+        } catch (error: unknown) {
             console.error(error);
-            alert("Something went wrong.");
+
+            alert(
+                "Something went wrong while slicing."
+            );
         } finally {
-            setLoading(false);
+            setIsSlicing(false);
+        }
+    };
+
+    const handlePlaceOrder = async (): Promise<void> => {
+        if (!file) {
+            alert("Please select an STL file.");
+            return;
+        }
+
+        if (!sliceResult) {
+            alert("Please slice the STL first.");
+            return;
+        }
+
+        const user = auth.currentUser;
+
+        if (!user) {
+            alert("Please login first.");
+            return;
+        }
+
+        setIsOrdering(true);
+
+        try {
+            const storageData = await uploadSTL(
+                user.uid,
+                file
+            );
+
+            if (!storageData?.path) {
+                throw new Error(
+                    "Failed to upload STL."
+                );
+            }
+
+            const idToken =
+                await user.getIdToken();
+
+            const response = await fetch(
+                "/api/orders",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                        Authorization:
+                            `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        storagePath:
+                            storageData.path,
+
+                        filament,
+                        infill: Number(infill),
+                        layerHeight:
+                            Number(layerHeight),
+                        wallThickness:
+                            Number(wallThickness),
+
+                        filamentUsedGrams:
+                            sliceResult
+                                .filamentUsedGrams,
+
+                        price:
+                            sliceResult.pricing
+                                .totalPrice,
+                    }),
+                }
+            );
+
+            const data: OrderResponse =
+                await response.json();
+
+            if (!response.ok || !data.success) {
+                alert(
+                    data.error ||
+                        "Failed to create order."
+                );
+                return;
+            }
+
+            alert(
+                `Order created successfully!\nOrder ID: ${data.orderId}`
+            );
+
+            setSliceResult(null);
+            setFile(null);
+        } catch (error: unknown) {
+            console.error(error);
+
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : "Something went wrong while creating the order."
+            );
+        } finally {
+            setIsOrdering(false);
         }
     };
 
@@ -67,8 +222,14 @@ export default function ClientOrder() {
                 <input
                     type="file"
                     accept=".stl"
-                    onChange={(e) => {
-                        setFile(e.target.files?.[0] || null);
+                    onChange={(
+                        event: React.ChangeEvent<HTMLInputElement>
+                    ) => {
+                        setFile(
+                            event.target.files?.[0] ||
+                                null
+                        );
+                        setSliceResult(null);
                     }}
                     className="mt-2 block text-black"
                 />
@@ -88,14 +249,23 @@ export default function ClientOrder() {
 
                 <select
                     value={infill}
-                    onChange={(e) => setInfill(e.target.value)}
+                    onChange={(
+                        event: React.ChangeEvent<HTMLSelectElement>
+                    ) => {
+                        setInfill(event.target.value);
+                        setSliceResult(null);
+                    }}
                     className="mt-2 block rounded-lg border px-3 py-2 text-black"
                 >
                     {Array.from(
                         { length: 18 },
-                        (_, index) => (index + 2) * 5
-                    ).map((value) => (
-                        <option key={value} value={value}>
+                        (_, index) =>
+                            (index + 2) * 5
+                    ).map((value: number) => (
+                        <option
+                            key={value}
+                            value={value}
+                        >
                             {value}%
                         </option>
                     ))}
@@ -110,14 +280,31 @@ export default function ClientOrder() {
 
                 <select
                     value={layerHeight}
-                    onChange={(e) => setLayerHeight(e.target.value)}
+                    onChange={(
+                        event: React.ChangeEvent<HTMLSelectElement>
+                    ) => {
+                        setLayerHeight(
+                            event.target.value
+                        );
+                        setSliceResult(null);
+                    }}
                     className="mt-2 block rounded-lg border px-3 py-2 text-black"
                 >
-                    <option value="0.12">0.12 mm</option>
-                    <option value="0.16">0.16 mm</option>
-                    <option value="0.20">0.20 mm</option>
-                    <option value="0.24">0.24 mm</option>
-                    <option value="0.28">0.28 mm</option>
+                    <option value="0.12">
+                        0.12 mm
+                    </option>
+                    <option value="0.16">
+                        0.16 mm
+                    </option>
+                    <option value="0.20">
+                        0.20 mm
+                    </option>
+                    <option value="0.24">
+                        0.24 mm
+                    </option>
+                    <option value="0.28">
+                        0.28 mm
+                    </option>
                 </select>
             </div>
 
@@ -129,14 +316,31 @@ export default function ClientOrder() {
 
                 <select
                     value={wallThickness}
-                    onChange={(e) => setWallThickness(e.target.value)}
+                    onChange={(
+                        event: React.ChangeEvent<HTMLSelectElement>
+                    ) => {
+                        setWallThickness(
+                            event.target.value
+                        );
+                        setSliceResult(null);
+                    }}
                     className="mt-2 block rounded-lg border px-3 py-2 text-black"
                 >
-                    <option value="0.4">0.4 mm</option>
-                    <option value="0.8">0.8 mm</option>
-                    <option value="1.2">1.2 mm</option>
-                    <option value="1.6">1.6 mm</option>
-                    <option value="2.0">2.0 mm</option>
+                    <option value="0.4">
+                        0.4 mm
+                    </option>
+                    <option value="0.8">
+                        0.8 mm
+                    </option>
+                    <option value="1.2">
+                        1.2 mm
+                    </option>
+                    <option value="1.6">
+                        1.6 mm
+                    </option>
+                    <option value="2.0">
+                        2.0 mm
+                    </option>
                 </select>
             </div>
 
@@ -148,12 +352,25 @@ export default function ClientOrder() {
 
                 <select
                     value={filament}
-                    onChange={(e) => setFilament(e.target.value)}
+                    onChange={(
+                        event: React.ChangeEvent<HTMLSelectElement>
+                    ) => {
+                        setFilament(
+                            event.target.value
+                        );
+                        setSliceResult(null);
+                    }}
                     className="mt-2 block rounded-lg border px-3 py-2 text-black"
                 >
-                    <option value="PLA">PLA</option>
-                    <option value="PETG">PETG</option>
-                    <option value="ABS">ABS</option>
+                    <option value="PLA">
+                        PLA
+                    </option>
+                    <option value="PETG">
+                        PETG
+                    </option>
+                    <option value="ABS">
+                        ABS
+                    </option>
                 </select>
             </div>
 
@@ -161,79 +378,89 @@ export default function ClientOrder() {
             <button
                 type="button"
                 onClick={handleSlice}
-                disabled={loading}
+                disabled={
+                    isSlicing ||
+                    isOrdering
+                }
                 className="mt-6 rounded-lg bg-[#4682A9] px-5 py-2 font-semibold text-white disabled:opacity-50"
             >
-                {loading ? "Slicing..." : "Slice"}
+                {isSlicing
+                    ? "Slicing..."
+                    : "Slice"}
             </button>
 
-            {/* Result */}
-            {result && (
-                <div className="mt-8 max-w-md rounded-xl bg-white p-6 text-black shadow">
-                    <h2 className="text-xl font-semibold">
+            {/* Slice Result */}
+            {sliceResult && (
+                <div className="mt-8 rounded-xl border bg-white p-6 text-black">
+                    <h2 className="text-lg font-semibold">
                         Slicing Result
                     </h2>
 
                     <div className="mt-4 space-y-2">
                         <p>
-                            <strong>File:</strong>{" "}
-                            {result.fileName}
+                            Filament Used:{" "}
+                            <strong>
+                                {
+                                    sliceResult
+                                        .filamentUsedGrams
+                                }{" "}
+                                g
+                            </strong>
                         </p>
 
                         <p>
-                            <strong>Filament:</strong>{" "}
-                            {result.configuration.filament}
+                            Filament Cost:{" "}
+                            <strong>
+                                Rp{" "}
+                                {sliceResult
+                                    .pricing
+                                    .filamentCost
+                                    .toLocaleString(
+                                        "id-ID"
+                                    )}
+                            </strong>
                         </p>
 
                         <p>
-                            <strong>Infill:</strong>{" "}
-                            {result.configuration.infill}%
+                            Printing Fee:{" "}
+                            <strong>
+                                Rp{" "}
+                                {sliceResult
+                                    .pricing
+                                    .printingFee
+                                    .toLocaleString(
+                                        "id-ID"
+                                    )}
+                            </strong>
                         </p>
 
-                        <p>
-                            <strong>Layer Height:</strong>{" "}
-                            {result.configuration.layerHeight} mm
-                        </p>
-
-                        <p>
-                            <strong>Wall Thickness:</strong>{" "}
-                            {result.configuration.wallThickness} mm
-                        </p>
-
-                        <p>
-                            <strong>Filament Used:</strong>{" "}
-                            {result.filamentUsedGrams} g
+                        <p className="text-lg">
+                            Total Price:{" "}
+                            <strong>
+                                Rp{" "}
+                                {sliceResult
+                                    .pricing
+                                    .totalPrice
+                                    .toLocaleString(
+                                        "id-ID"
+                                    )}
+                            </strong>
                         </p>
                     </div>
 
-                    <div className="mt-6 border-t pt-4">
-                        <h3 className="font-semibold">
-                            Price Breakdown
-                        </h3>
-
-                        <div className="mt-2 space-y-2">
-                            <p>
-                                Filament: Rp{" "}
-                                {result.pricing.filamentCost.toLocaleString(
-                                    "id-ID"
-                                )}
-                            </p>
-
-                            <p>
-                                Printing Fee: Rp{" "}
-                                {result.pricing.printingFee.toLocaleString(
-                                    "id-ID"
-                                )}
-                            </p>
-
-                            <p className="text-lg font-bold">
-                                Total: Rp{" "}
-                                {result.pricing.totalPrice.toLocaleString(
-                                    "id-ID"
-                                )}
-                            </p>
-                        </div>
-                    </div>
+                    {/* Place Order */}
+                    <button
+                        type="button"
+                        onClick={
+                            handlePlaceOrder
+                        }
+                        disabled={isOrdering}
+                        className="mt-6 rounded-lg bg-green-600 px-5 py-2 font-semibold text-white disabled:opacity-50"
+                    >
+                        {isOrdering
+                            ? "Creating Order..."
+                            : "Place Order"}
+                    </button>
                 </div>
             )}
         </main>
