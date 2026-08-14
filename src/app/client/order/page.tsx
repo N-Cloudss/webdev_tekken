@@ -1,468 +1,209 @@
 "use client";
 
 import { useState } from "react";
-import { auth } from "@/lib/firebase";
-import { uploadSTL } from "@/services/storage";
+import Link from "next/link";
 
-type Pricing = {
-    filamentPricePerGram: number;
-    filamentCost: number;
-    printingFee: number;
-    totalPrice: number;
-};
+export default function Order3DPrintPage() {
+  const [formData, setFormData] = useState({
+    projectName: "",
+    fileUrl: "", // Link Google Drive / Dropbox file .STL / .OBJ
+    material: "PLA",
+    infill: "20%",
+    layerHeight: "0.2mm (Standard)",
+    color: "Hitam",
+    quantity: 1,
+    notes: "",
+  });
 
-type SliceResult = {
-    filamentUsedGrams: number;
-    pricing: Pricing;
-};
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-type SliceResponse = {
-    success: boolean;
-    filamentUsedGrams?: number;
-    pricing?: Pricing;
-    error?: string;
-};
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Data Pengajuan 3D Print:", formData);
+    setIsSubmitted(true);
+  };
 
-type OrderResponse = {
-    success: boolean;
-    orderId?: string;
-    error?: string;
-};
+  return (
+    <main className="min-h-screen bg-[#F6F4EB] text-slate-800 p-6 md:p-12">
+      <div className="max-w-3xl mx-auto">
+        
+        {/* BREADCRUMB */}
+        <Link
+          href="/client"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6 font-medium"
+        >
+          ← Kembali ke Dashboard
+        </Link>
 
-export default function ClientOrder() {
-    const [file, setFile] = useState<File | null>(null);
-
-    const [infill, setInfill] = useState<string>("20");
-    const [layerHeight, setLayerHeight] =
-        useState<string>("0.20");
-    const [wallThickness, setWallThickness] =
-        useState<string>("0.8");
-    const [filament, setFilament] =
-        useState<string>("PLA");
-
-    const [sliceResult, setSliceResult] =
-        useState<SliceResult | null>(null);
-
-    const [isSlicing, setIsSlicing] =
-        useState<boolean>(false);
-
-    const [isOrdering, setIsOrdering] =
-        useState<boolean>(false);
-
-    const handleSlice = async (): Promise<void> => {
-        if (!file) {
-            alert("Please select an STL file.");
-            return;
-        }
-
-        setIsSlicing(true);
-        setSliceResult(null);
-
-        const formData = new FormData();
-
-        formData.append("file", file);
-        formData.append("infill", infill);
-        formData.append("layerHeight", layerHeight);
-        formData.append("wallThickness", wallThickness);
-        formData.append("filament", filament);
-
-        try {
-            const response = await fetch("/api/slice", {
-                method: "POST",
-                body: formData,
-            });
-
-            const data: SliceResponse =
-                await response.json();
-
-            if (!response.ok || !data.success) {
-                alert(
-                    data.error ||
-                        "Failed to slice STL."
-                );
-                return;
-            }
-
-            if (
-                data.filamentUsedGrams === undefined ||
-                !data.pricing
-            ) {
-                alert(
-                    "Invalid response from slicing API."
-                );
-                return;
-            }
-
-            setSliceResult({
-                filamentUsedGrams:
-                    data.filamentUsedGrams,
-                pricing: data.pricing,
-            });
-        } catch (error: unknown) {
-            console.error(error);
-
-            alert(
-                "Something went wrong while slicing."
-            );
-        } finally {
-            setIsSlicing(false);
-        }
-    };
-
-    const handlePlaceOrder = async (): Promise<void> => {
-        if (!file) {
-            alert("Please select an STL file.");
-            return;
-        }
-
-        if (!sliceResult) {
-            alert("Please slice the STL first.");
-            return;
-        }
-
-        const user = auth.currentUser;
-
-        if (!user) {
-            alert("Please login first.");
-            return;
-        }
-
-        setIsOrdering(true);
-
-        try {
-            const storageData = await uploadSTL(
-                user.uid,
-                file
-            );
-
-            if (!storageData?.path) {
-                throw new Error(
-                    "Failed to upload STL."
-                );
-            }
-
-            const idToken =
-                await user.getIdToken();
-
-            const response = await fetch(
-                "/api/orders",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                        Authorization:
-                            `Bearer ${idToken}`,
-                    },
-                    body: JSON.stringify({
-                        fileName: file.name,
-                        storagePath:
-                            storageData.path,
-
-                        filament,
-                        infill: Number(infill),
-                        layerHeight:
-                            Number(layerHeight),
-                        wallThickness:
-                            Number(wallThickness),
-
-                        filamentUsedGrams:
-                            sliceResult
-                                .filamentUsedGrams,
-
-                        price:
-                            sliceResult.pricing
-                                .totalPrice,
-                    }),
-                }
-            );
-
-            const data: OrderResponse =
-                await response.json();
-
-            if (!response.ok || !data.success) {
-                alert(
-                    data.error ||
-                        "Failed to create order."
-                );
-                return;
-            }
-
-            alert(
-                `Order created successfully!\nOrder ID: ${data.orderId}`
-            );
-
-            setSliceResult(null);
-            setFile(null);
-        } catch (error: unknown) {
-            console.error(error);
-
-            alert(
-                error instanceof Error
-                    ? error.message
-                    : "Something went wrong while creating the order."
-            );
-        } finally {
-            setIsOrdering(false);
-        }
-    };
-
-    return (
-        <main className="min-h-screen bg-[#F6F4EB] p-8">
-            <h1 className="text-2xl font-semibold text-black">
-                Create Order
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-2xl">🖨️</span>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+              Form Order 3D Printing Service
             </h1>
+          </div>
+          <p className="text-slate-500 mb-8 text-sm">
+            Kirimkan file 3D (`.stl`, `.obj`, `.3mf`) dan tentukan spesifikasi cetak. Admin akan menghitung gramasi filament/resin dan memberikan penawaran harga.
+          </p>
 
-            {/* STL File */}
-            <div className="mt-6">
-                <label className="font-medium text-black">
-                    STL File
-                </label>
-
+          {isSubmitted ? (
+            /* TAMPILAN SETELAH SUBMIT */
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+                ✓
+              </div>
+              <h3 className="text-xl font-bold text-emerald-900">
+                Pengajuan Cetak Berhasil Terkirim!
+              </h3>
+              <p className="text-sm text-emerald-700 max-w-md mx-auto">
+                File 3D kamu sedang masuk antrean <span className="font-bold">"Pengecekan Admin (Slicing Process)"</span>. Admin akan menghitung estimasi berat & waktu cetak.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/client"
+                  className="inline-block bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition-all"
+                >
+                  Cek Status Pesanan
+                </Link>
+              </div>
+            </div>
+          ) : (
+            /* FORM PARAMETER 3D PRINTING */
+            <form onSubmit={handleSubmit} className="space-y-6">
+              
+              {/* 1. NAMA MODEL / NAMA PESANAN */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">Nama Model / Pesanan</label>
                 <input
-                    type="file"
-                    accept=".stl"
-                    onChange={(
-                        event: React.ChangeEvent<HTMLInputElement>
-                    ) => {
-                        setFile(
-                            event.target.files?.[0] ||
-                                null
-                        );
-                        setSliceResult(null);
-                    }}
-                    className="mt-2 block text-black"
+                  type="text"
+                  required
+                  placeholder="Contoh: Casing Keychron K2 / Action Figure Batman"
+                  value={formData.projectName}
+                  onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
 
-                {file && (
-                    <p className="mt-2 text-sm text-gray-600">
-                        Selected: {file.name}
-                    </p>
-                )}
-            </div>
+              {/* 2. LINK FILE 3D (.STL / .OBJ) */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">Link File 3D (.STL / .OBJ / .3MF)</label>
+                <input
+                  type="url"
+                  required
+                  placeholder="Paste link Google Drive / OneDrive / Thingiverse"
+                  value={formData.fileUrl}
+                  onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Pastikan akses link cloud milikmu sudah di-set Public / Anyone with link.</p>
+              </div>
 
-            {/* Infill */}
-            <div className="mt-4">
-                <label className="font-medium text-black">
-                    Infill
-                </label>
-
-                <select
-                    value={infill}
-                    onChange={(
-                        event: React.ChangeEvent<HTMLSelectElement>
-                    ) => {
-                        setInfill(event.target.value);
-                        setSliceResult(null);
-                    }}
-                    className="mt-2 block rounded-lg border px-3 py-2 text-black"
-                >
-                    {Array.from(
-                        { length: 18 },
-                        (_, index) =>
-                            (index + 2) * 5
-                    ).map((value: number) => (
-                        <option
-                            key={value}
-                            value={value}
-                        >
-                            {value}%
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Layer Height */}
-            <div className="mt-4">
-                <label className="font-medium text-black">
-                    Layer Height
-                </label>
-
-                <select
-                    value={layerHeight}
-                    onChange={(
-                        event: React.ChangeEvent<HTMLSelectElement>
-                    ) => {
-                        setLayerHeight(
-                            event.target.value
-                        );
-                        setSliceResult(null);
-                    }}
-                    className="mt-2 block rounded-lg border px-3 py-2 text-black"
-                >
-                    <option value="0.12">
-                        0.12 mm
-                    </option>
-                    <option value="0.16">
-                        0.16 mm
-                    </option>
-                    <option value="0.20">
-                        0.20 mm
-                    </option>
-                    <option value="0.24">
-                        0.24 mm
-                    </option>
-                    <option value="0.28">
-                        0.28 mm
-                    </option>
-                </select>
-            </div>
-
-            {/* Wall Thickness */}
-            <div className="mt-4">
-                <label className="font-medium text-black">
-                    Wall Thickness
-                </label>
-
-                <select
-                    value={wallThickness}
-                    onChange={(
-                        event: React.ChangeEvent<HTMLSelectElement>
-                    ) => {
-                        setWallThickness(
-                            event.target.value
-                        );
-                        setSliceResult(null);
-                    }}
-                    className="mt-2 block rounded-lg border px-3 py-2 text-black"
-                >
-                    <option value="0.4">
-                        0.4 mm
-                    </option>
-                    <option value="0.8">
-                        0.8 mm
-                    </option>
-                    <option value="1.2">
-                        1.2 mm
-                    </option>
-                    <option value="1.6">
-                        1.6 mm
-                    </option>
-                    <option value="2.0">
-                        2.0 mm
-                    </option>
-                </select>
-            </div>
-
-            {/* Filament */}
-            <div className="mt-4">
-                <label className="font-medium text-black">
-                    Filament
-                </label>
-
-                <select
-                    value={filament}
-                    onChange={(
-                        event: React.ChangeEvent<HTMLSelectElement>
-                    ) => {
-                        setFilament(
-                            event.target.value
-                        );
-                        setSliceResult(null);
-                    }}
-                    className="mt-2 block rounded-lg border px-3 py-2 text-black"
-                >
-                    <option value="PLA">
-                        PLA
-                    </option>
-                    <option value="PETG">
-                        PETG
-                    </option>
-                    <option value="ABS">
-                        ABS
-                    </option>
-                </select>
-            </div>
-
-            {/* Slice */}
-            <button
-                type="button"
-                onClick={handleSlice}
-                disabled={
-                    isSlicing ||
-                    isOrdering
-                }
-                className="mt-6 rounded-lg bg-[#4682A9] px-5 py-2 font-semibold text-white disabled:opacity-50"
-            >
-                {isSlicing
-                    ? "Slicing..."
-                    : "Slice"}
-            </button>
-
-            {/* Slice Result */}
-            {sliceResult && (
-                <div className="mt-8 rounded-xl border bg-white p-6 text-black">
-                    <h2 className="text-lg font-semibold">
-                        Slicing Result
-                    </h2>
-
-                    <div className="mt-4 space-y-2">
-                        <p>
-                            Filament Used:{" "}
-                            <strong>
-                                {
-                                    sliceResult
-                                        .filamentUsedGrams
-                                }{" "}
-                                g
-                            </strong>
-                        </p>
-
-                        <p>
-                            Filament Cost:{" "}
-                            <strong>
-                                Rp{" "}
-                                {sliceResult
-                                    .pricing
-                                    .filamentCost
-                                    .toLocaleString(
-                                        "id-ID"
-                                    )}
-                            </strong>
-                        </p>
-
-                        <p>
-                            Printing Fee:{" "}
-                            <strong>
-                                Rp{" "}
-                                {sliceResult
-                                    .pricing
-                                    .printingFee
-                                    .toLocaleString(
-                                        "id-ID"
-                                    )}
-                            </strong>
-                        </p>
-
-                        <p className="text-lg">
-                            Total Price:{" "}
-                            <strong>
-                                Rp{" "}
-                                {sliceResult
-                                    .pricing
-                                    .totalPrice
-                                    .toLocaleString(
-                                        "id-ID"
-                                    )}
-                            </strong>
-                        </p>
-                    </div>
-
-                    {/* Place Order */}
-                    <button
-                        type="button"
-                        onClick={
-                            handlePlaceOrder
-                        }
-                        disabled={isOrdering}
-                        className="mt-6 rounded-lg bg-green-600 px-5 py-2 font-semibold text-white disabled:opacity-50"
-                    >
-                        {isOrdering
-                            ? "Creating Order..."
-                            : "Place Order"}
-                    </button>
+              {/* 3. PARAMETER BAHAN & INFILL */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Jenis Material Filament / Resin</label>
+                  <select
+                    value={formData.material}
+                    onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="PLA">PLA+ (Standard, Bagus & Kuat)</option>
+                    <option value="PETG">PETG (Tahan Panas & Bahan Kimia)</option>
+                    <option value="ABS">ABS (Sangat Kuat & Tahan Benturan)</option>
+                    <option value="TPU">TPU (Karet / Lentur / Flexible)</option>
+                    <option value="Resin">Resin UV (Detail Sangat Tinggi / Miniature)</option>
+                  </select>
                 </div>
-            )}
-        </main>
-    );
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Kepadatan (Infill Density)</label>
+                  <select
+                    value={formData.infill}
+                    onChange={(e) => setFormData({ ...formData, infill: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="15%">15% (Pajangan / Ringan)</option>
+                    <option value="20%">20% (Standard / Rekomendasi)</option>
+                    <option value="50%">50% (Kuat / Komponen Mekanikal)</option>
+                    <option value="100%">100% (Padat Padat Total)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 4. LAYER HEIGHT & WARNA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Presisi (Layer Height)</label>
+                  <select
+                    value={formData.layerHeight}
+                    onChange={(e) => setFormData({ ...formData, layerHeight: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="0.12mm">0.12 mm (Sangat Halus)</option>
+                    <option value="0.2mm (Standard)">0.20 mm (Standard - Balance)</option>
+                    <option value="0.28mm">0.28 mm (Cepat / Rough)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Warna Filament</label>
+                  <select
+                    value={formData.color}
+                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="Hitam">Hitam</option>
+                    <option value="Putih">Putih</option>
+                    <option value="Abu-abu">Abu-abu</option>
+                    <option value="Merah">Merah</option>
+                    <option value="Biru">Biru</option>
+                    <option value="Transparan">Transparan / Clear</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 5. JUMLAH PCS */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">Jumlah Cetak (Pcs)</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* 6. CATATAN TAMBAHAN */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">Catatan Khusus (Opsional)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Misal: Perlu support khusus, skala dinaikkan 150%, minta penambahan lubang baut, dll..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
+              </div>
+
+              {/* INFO HARGA */}
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-xs text-amber-800 flex justify-between items-center">
+                <span>Estimasi Biaya Cetak:</span>
+                <span className="font-bold text-amber-900 text-sm">Menunggu Perhitungan Slicer Admin</span>
+              </div>
+
+              {/* SUBMIT BUTTON */}
+              <button
+                type="submit"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md text-sm"
+              >
+                Kirim File & Minta Penawaran Harga
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </main>
+  );
 }
