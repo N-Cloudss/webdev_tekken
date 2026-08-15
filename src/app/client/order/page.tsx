@@ -776,7 +776,7 @@ export default function ClientOrder() {
                             >
                                 {isOrdering
                                     ? "Mengirim Order..."
-                                    : "Kirim File & Minta Penawaran Harga"}
+                                    : "Place Order"}
                             </button>
 
                             <p className="text-xs text-slate-400 text-center">

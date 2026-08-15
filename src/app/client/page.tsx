@@ -16,10 +16,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { logout } from "@/services/auth";
+import Fuse from "fuse.js";
+import { Search, SlidersHorizontal } from "lucide-react";
 
 type Order = {
     id: string;
     fileName: string;
+    storagePath: string;
     filament: string;
     infill: number;
     layerHeight: number;
@@ -42,6 +45,10 @@ export default function ClientDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [sortBy, setSortBy] = useState("newest");
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -101,7 +108,52 @@ export default function ClientDashboard() {
         (order) => order.status.toLowerCase() === "completed"
     ).length;
 
-    const recentOrders = [...orders].slice(0, 3);
+    const fuse = new Fuse(orders, {
+        keys: [
+            "fileName",
+            "filament",
+            "status",
+        ],
+        threshold: 0.3,
+    });
+
+    const searchedOrders = search
+        ? fuse.search(search).map((result) => result.item)
+        : orders;
+
+    const filteredOrders = searchedOrders.filter((order) => {
+        if (statusFilter === "all") {
+            return true;
+        }
+
+        return order.status.toLowerCase() === statusFilter;
+    });
+
+    const recentOrders = [...filteredOrders].sort((a, b) => {
+        if (sortBy === "newest") {
+            return (
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+            );
+        }
+
+        if (sortBy === "oldest") {
+            return (
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+            );
+        }
+
+        if (sortBy === "price-high") {
+            return b.price - a.price;
+        }
+
+        if (sortBy === "price-low") {
+            return a.price - b.price;
+        }
+
+        return 0;
+    });
 
     const handleLogout = async () => {
         try {
@@ -133,14 +185,6 @@ export default function ClientDashboard() {
                         >
                             <LayoutDashboard size={18} />
                             Dashboard
-                        </Link>
-
-                        <Link
-                            href="/client/order"
-                            className="mb-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-gray-300 transition hover:bg-white/10 hover:text-white"
-                        >
-                            <Package size={18} />
-                            Create Order
                         </Link>
 
                         <button
@@ -304,6 +348,85 @@ export default function ClientDashboard() {
                                 </Link>
                             </div>
 
+                            <div className="border-b px-6 py-4">
+                                <div className="flex flex-col gap-3 md:flex-row">
+                                    {/* SEARCH */}
+                                    <div className="relative flex-1">
+                                        <Search
+                                            size={18}
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                        />
+
+                                        <input
+                                            type="text"
+                                            value={search}
+                                            onChange={(e) =>
+                                                setSearch(e.target.value)
+                                            }
+                                            placeholder="Search orders..."
+                                            className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#4682A9] focus:ring-2 focus:ring-[#4682A9]/20"
+                                        />
+                                    </div>
+
+                                    {/* STATUS FILTER */}
+                                    <div className="flex items-center gap-2">
+                                        <SlidersHorizontal
+                                            size={18}
+                                            className="text-gray-400"
+                                        />
+
+                                        <select
+                                            value={statusFilter}
+                                            onChange={(e) =>
+                                                setStatusFilter(e.target.value)
+                                            }
+                                            className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4682A9]"
+                                        >
+                                            <option value="all">
+                                                All Status
+                                            </option>
+
+                                            <option value="pending">
+                                                Pending
+                                            </option>
+
+                                            <option value="printing">
+                                                Printing
+                                            </option>
+
+                                            <option value="completed">
+                                                Completed
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    {/* SORT */}
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) =>
+                                            setSortBy(e.target.value)
+                                        }
+                                        className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4682A9]"
+                                    >
+                                        <option value="newest">
+                                            Newest
+                                        </option>
+
+                                        <option value="oldest">
+                                            Oldest
+                                        </option>
+
+                                        <option value="price-high">
+                                            Price: High → Low
+                                        </option>
+
+                                        <option value="price-low">
+                                            Price: Low → High
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div className="divide-y">
                                 {!loading &&
                                     !error &&
@@ -320,8 +443,9 @@ export default function ClientDashboard() {
                                         order.status.toLowerCase();
 
                                     return (
-                                        <div
+                                        <Link
                                             key={order.id}
+                                            href={`/client/${order.id}`}
                                             className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
                                         >
                                             <div className="flex items-center gap-4">
@@ -361,7 +485,7 @@ export default function ClientDashboard() {
                                                     {order.status}
                                                 </span>
                                             </div>
-                                        </div>
+                                        </Link>
                                     );
                                 })}
                             </div>

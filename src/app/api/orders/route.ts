@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
         const {
             fileName,
+            storagePath,
             filament,
             infill,
             layerHeight,
@@ -131,12 +132,27 @@ export async function POST(request: Request) {
             );
         }
 
+        if (
+            typeof storagePath !== "string" ||
+            storagePath.trim() === "" 
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Invalid storage path",
+                },
+                { status: 400 }
+            )
+        }
+
         const orderRef = await db.collection("orders").add({
             uid,
             email,
             name,
 
             fileName,
+            storagePath,
+            
             filament,
             infill,
             layerHeight,
