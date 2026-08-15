@@ -164,3 +164,53 @@ export async function POST(request: Request) {
         );
     }
 }
+
+export async function GET(request: Request) {
+    try {
+        const authorization = 
+            request.headers.get("Authorization");
+        
+        if (!authorization?.startsWith("Bearer ")) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Unauthorized",
+                },
+                { status: 401 }
+            );
+        }
+
+        const idToken = 
+            authorization.split("Bearer ")[1];
+
+        const decodedToken = 
+            await auth.verifyIdToken(idToken);
+
+        const uid = decodedToken.uid;
+
+        const snapshot = await db
+            .collection("orders")
+            .where("uid", "==", uid)
+            .get();
+        
+        const orders = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        }));
+
+        return NextResponse.json({
+            success: true,
+            orders,
+        });
+    } catch (error) {
+        console.error(error);
+
+        return NextResponse.json(
+            {
+                success: false,
+                error: "Failed to fetch orders",
+            },
+            { status: 500 }
+        );
+    }
+}
