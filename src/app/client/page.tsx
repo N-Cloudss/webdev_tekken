@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     LayoutDashboard,
     Package,
@@ -11,31 +15,121 @@ import {
     Printer,
 } from "lucide-react";
 
-const recentOrders = [
-    {
-        id: "ORD-001",
-        file: "phone-case.stl",
-        material: "PLA",
-        status: "Printing",
-        price: 45000,
-    },
-    {
-        id: "ORD-002",
-        file: "miniature.stl",
-        material: "PETG",
-        status: "Completed",
-        price: 65000,
-    },
-    {
-        id: "ORD-003",
-        file: "prototype.stl",
-        material: "ABS",
-        status: "Pending",
-        price: 55000,
-    },
-];
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+    collection,
+    getDocs,
+    query,
+    where,
+} from "firebase/firestore";
+
+type Order = {
+    id: string;
+    fileName: string;
+    filament: string;
+    infill: number;
+    layerHeight: number;
+    wallThickness: number;
+    filamentUsedGrams: number;
+    price: number;
+    status: string;
+    createdAt?: {
+        toMillis?: () => number;
+    };
+};
 
 export default function ClientDashboard() {
+    const router = useRouter();
+
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            try {
+                setLoading(true);
+                setError("");
+
+                const ordersRef = collection(db, "orders");
+
+                const ordersQuery = query(
+                    ordersRef,
+                    where("uid", "==", user.uid)
+                );
+
+                const snapshot = await getDocs(ordersQuery);
+
+                const fetchedOrders: Order[] = snapshot.docs.map((doc) => {
+                    const data = doc.data();
+
+                    return {
+                        id: doc.id,
+                        fileName: data.fileName ?? "",
+                        filament: data.filament ?? "",
+                        infill: data.infill ?? 0,
+                        layerHeight: data.layerHeight ?? 0,
+                        wallThickness: data.wallThickness ?? 0,
+                        filamentUsedGrams: data.filamentUsedGrams ?? 0,
+                        price: data.price ?? 0,
+                        status: data.status ?? "pending",
+                        createdAt: data.createdAt,
+                    };
+                });
+
+                fetchedOrders.sort((a, b) => {
+                    const timeA = a.createdAt?.toMillis
+                        ? a.createdAt.toMillis()
+                        : 0;
+
+                    const timeB = b.createdAt?.toMillis
+                        ? b.createdAt.toMillis()
+                        : 0;
+
+                    return timeB - timeA;
+                });
+
+                setOrders(fetchedOrders);
+            } catch (err) {
+                console.error("GET ORDERS ERROR:", err);
+                setError("Failed to load orders.");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        return () => unsubscribe();
+    }, [router]);
+
+    const totalOrders = orders.length;
+
+    const pendingOrders = orders.filter(
+        (order) => order.status.toLowerCase() === "pending"
+    ).length;
+
+    const printingOrders = orders.filter(
+        (order) => order.status.toLowerCase() === "printing"
+    ).length;
+
+    const completedOrders = orders.filter(
+        (order) => order.status.toLowerCase() === "completed"
+    ).length;
+
+    const handleLogout = async () => {
+        try {
+            await auth.signOut();
+            router.push("/login");
+        } catch (err) {
+            console.error("LOGOUT ERROR:", err);
+        }
+    };
+
     return (
         <main className="min-h-screen bg-[#F6F4EB] text-[#111827]">
             <div className="flex min-h-screen">
@@ -95,6 +189,7 @@ export default function ClientDashboard() {
                     <div className="border-t border-white/10 p-4">
                         <button
                             type="button"
+                            onClick={handleLogout}
                             className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-gray-300 transition hover:bg-white/10 hover:text-white"
                         >
                             <LogOut size={18} />
@@ -144,7 +239,7 @@ export default function ClientDashboard() {
                                         </p>
 
                                         <p className="mt-2 text-3xl font-bold text-[#0F172A]">
-                                            3
+                                            {loading ? "..." : totalOrders}
                                         </p>
                                     </div>
 
@@ -163,7 +258,7 @@ export default function ClientDashboard() {
                                         </p>
 
                                         <p className="mt-2 text-3xl font-bold text-[#0F172A]">
-                                            1
+                                            {loading ? "..." : pendingOrders}
                                         </p>
                                     </div>
 
@@ -182,7 +277,7 @@ export default function ClientDashboard() {
                                         </p>
 
                                         <p className="mt-2 text-3xl font-bold text-[#0F172A]">
-                                            1
+                                            {loading ? "..." : printingOrders}
                                         </p>
                                     </div>
 
@@ -201,7 +296,7 @@ export default function ClientDashboard() {
                                         </p>
 
                                         <p className="mt-2 text-3xl font-bold text-[#0F172A]">
-                                            1
+                                            {loading ? "..." : completedOrders}
                                         </p>
                                     </div>
 
@@ -237,57 +332,89 @@ export default function ClientDashboard() {
 
                             </div>
 
+                            {/* Error */}
+                            {error && (
+                                <div className="px-6 py-5 text-sm text-red-500">
+                                    {error}
+                                </div>
+                            )}
+
+                            {/* Loading */}
+                            {loading && !error && (
+                                <div className="px-6 py-8 text-center text-sm text-gray-500">
+                                    Loading orders...
+                                </div>
+                            )}
+
+                            {/* Empty */}
+                            {!loading && !error && orders.length === 0 && (
+                                <div className="px-6 py-8 text-center text-sm text-gray-500">
+                                    You don't have any orders yet.
+                                </div>
+                            )}
+
                             {/* Orders */}
-                            <div className="divide-y">
+                            {!loading && !error && orders.length > 0 && (
+                                <div className="divide-y">
 
-                                {recentOrders.map((order) => (
-                                    <div
-                                        key={order.id}
-                                        className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
-                                    >
+                                    {orders.slice(0, 5).map((order) => {
 
-                                        <div className="flex items-center gap-4">
+                                        const status = order.status.toLowerCase();
 
-                                            <div className="rounded-lg bg-[#E8F1F6] p-3 text-[#4682A9]">
-                                                <Package size={20} />
-                                            </div>
+                                        const displayStatus =
+                                            status.charAt(0).toUpperCase() +
+                                            status.slice(1);
 
-                                            <div>
-                                                <p className="font-semibold text-[#0F172A]">
-                                                    {order.id}
-                                                </p>
-
-                                                <p className="text-sm text-gray-500">
-                                                    {order.file} · {order.material}
-                                                </p>
-                                            </div>
-
-                                        </div>
-
-                                        <div className="flex items-center gap-6">
-
-                                            <p className="font-medium text-gray-700">
-                                                Rp {order.price.toLocaleString("id-ID")}
-                                            </p>
-
-                                            <span
-                                                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                                                    order.status === "Completed"
-                                                        ? "bg-green-100 text-green-700"
-                                                        : order.status === "Printing"
-                                                        ? "bg-blue-100 text-blue-700"
-                                                        : "bg-yellow-100 text-yellow-700"
-                                                }`}
+                                        return (
+                                            <div
+                                                key={order.id}
+                                                className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
                                             >
-                                                {order.status}
-                                            </span>
 
-                                        </div>
+                                                <div className="flex items-center gap-4">
 
-                                    </div>
-                                ))}
+                                                    <div className="rounded-lg bg-[#E8F1F6] p-3 text-[#4682A9]">
+                                                        <Package size={20} />
+                                                    </div>
 
-                            </div>
+                                                    <div>
+                                                        <p className="font-semibold text-[#0F172A]">
+                                                            ORD-{order.id.slice(0, 6).toUpperCase()}
+                                                        </p>
+
+                                                        <p className="text-sm text-gray-500">
+                                                            {order.fileName} · {order.filament}
+                                                        </p>
+                                                    </div>
+
+                                                </div>
+
+                                                <div className="flex items-center gap-6">
+
+                                                    <p className="font-medium text-gray-700">
+                                                        Rp {order.price.toLocaleString("id-ID")}
+                                                    </p>
+
+                                                    <span
+                                                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                                            status === "completed"
+                                                                ? "bg-green-100 text-green-700"
+                                                                : status === "printing"
+                                                                ? "bg-blue-100 text-blue-700"
+                                                                : "bg-yellow-100 text-yellow-700"
+                                                        }`}
+                                                    >
+                                                        {displayStatus}
+                                                    </span>
+
+                                                </div>
+
+                                            </div>
+                                        );
+                                    })}
+
+                                </div>
+                            )}
 
                         </div>
 
