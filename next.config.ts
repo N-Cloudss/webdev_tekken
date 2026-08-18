@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
 
-  serverExternalPackages: ["firebase-admin"],
+  serverExternalPackages: ['jose', 'jwks-rsa', 'firebase-admin'],
 };
 
 export default nextConfig;
