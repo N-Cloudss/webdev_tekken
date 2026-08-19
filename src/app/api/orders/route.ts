@@ -203,11 +203,20 @@ export async function GET(request: Request) {
             await auth.verifyIdToken(idToken);
 
         const uid = decodedToken.uid;
+        const email = decodedToken.email;
 
-        const snapshot = await db
-            .collection("orders")
-            .where("uid", "==", uid)
-            .get();
+        let snapshot;
+
+        if (email === "admin123@gmail.com") {
+            snapshot = await db
+                .collection("orders")
+                .get();
+        } else {
+            snapshot = await db
+                .collection("orders")
+                .where("uid", "==", uid)
+                .get();
+        }
         
         const orders = snapshot.docs.map((doc) => ({
             id: doc.id,
