@@ -44,6 +44,9 @@ export default function STLViewer({
             antialias: true,
         });
 
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(
             container.clientWidth,
@@ -219,7 +222,7 @@ export default function STLViewer({
                 );
             }
         };
-    }, [url]);
+    }, [url, grid, axes, wireframe, autoRotate]);
 
     return (
         <div

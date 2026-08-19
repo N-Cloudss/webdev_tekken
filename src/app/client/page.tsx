@@ -45,21 +45,22 @@ export default function ClientDashboard() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [sortBy, setSortBy] = useState("newest");
 
     useEffect(() => {
-        const fetchOrders = async () => {
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                router.replace("/login");
+                return;
+            }
+
+            setIsAuthenticated(true);
+
             try {
-                const user = auth.currentUser;
-
-                if (!user) {
-                    setError("You are not logged in.");
-                    return;
-                }
-
                 const idToken = await user.getIdToken();
 
                 const response = await fetch("/api/orders", {
@@ -89,10 +90,10 @@ export default function ClientDashboard() {
             } finally {
                 setLoading(false);
             }
-        };
+        });
 
-        fetchOrders();
-    }, []);
+        return () => unsubscribe();
+    }, [router]);
 
     const totalOrders = orders.length;
 
@@ -162,6 +163,20 @@ export default function ClientDashboard() {
         } catch (error) {
             console.error("LOGOUT ERROR:", error);
         }
+    };
+
+    if (loading) {
+        return (
+            <main className="flex min-h-screen items-center justify-center bg-[#F6F4EB]">
+                <p className="text-sm text-gray-500">
+                    Loading...
+                </p>
+            </main>
+        );
+    };
+
+    if (!isAuthenticated) {
+        return null;
     };
 
     return (

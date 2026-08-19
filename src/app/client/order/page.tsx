@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { auth } from "@/lib/firebase";
 import { uploadSTL } from "@/services/storage";
 
@@ -31,9 +32,6 @@ type OrderResponse = {
 };
 
 export default function ClientOrder() {
-    // =========================
-    // ORDER FORM STATE
-    // =========================
 
     const [projectName, setProjectName] =
         useState<string>("");
@@ -62,9 +60,6 @@ export default function ClientOrder() {
     const [notes, setNotes] =
         useState<string>("");
 
-    // =========================
-    // SLICING STATE
-    // =========================
 
     const [sliceResult, setSliceResult] =
         useState<SliceResult | null>(null);
@@ -78,9 +73,6 @@ export default function ClientOrder() {
     const [isSubmitted, setIsSubmitted] =
         useState<boolean>(false);
 
-    // =========================
-    // SLICE
-    // =========================
 
     const handleSlice = async (): Promise<void> => {
         if (!file) {
@@ -155,9 +147,6 @@ export default function ClientOrder() {
         }
     };
 
-    // =========================
-    // PLACE ORDER
-    // =========================
 
     const handlePlaceOrder =
         async (): Promise<void> => {
@@ -188,7 +177,6 @@ export default function ClientOrder() {
             setIsOrdering(true);
 
             try {
-                // Upload STL to Supabase
                 const storageData =
                     await uploadSTL(
                         user.uid,
@@ -201,11 +189,9 @@ export default function ClientOrder() {
                     );
                 }
 
-                // Get Firebase ID Token
                 const idToken =
                     await user.getIdToken();
 
-                // Create order in backend
                 const response =
                     await fetch(
                         "/api/orders",
@@ -284,15 +270,10 @@ export default function ClientOrder() {
             }
         };
 
-    // =========================
-    // UI
-    // =========================
 
     return (
         <main className="min-h-screen bg-[#F6F4EB] text-slate-800 p-6 md:p-12">
             <div className="max-w-3xl mx-auto">
-
-                {/* BREADCRUMB */}
 
                 <Link
                     href="/client"
@@ -302,8 +283,6 @@ export default function ClientOrder() {
                 </Link>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
-
-                    {/* HEADER */}
 
                     <div className="flex items-center gap-3 mb-2">
                         <span className="text-2xl">
@@ -321,8 +300,6 @@ export default function ClientOrder() {
                         melakukan slicing dan menghitung
                         estimasi berat serta harga.
                     </p>
-
-                    {/* SUCCESS */}
 
                     {isSubmitted ? (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center space-y-4">
@@ -353,7 +330,6 @@ export default function ClientOrder() {
                     ) : (
                         <div className="space-y-6">
 
-                            {/* PROJECT NAME */}
 
                             <div>
                                 <label className="block text-sm font-semibold mb-2">
@@ -377,7 +353,6 @@ export default function ClientOrder() {
                                 />
                             </div>
 
-                            {/* STL FILE */}
 
                             <div>
                                 <label className="block text-sm font-semibold mb-2">
@@ -410,8 +385,6 @@ export default function ClientOrder() {
                                     </p>
                                 )}
                             </div>
-
-                            {/* MATERIAL + INFILL */}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -504,8 +477,6 @@ export default function ClientOrder() {
                                     </select>
                                 </div>
                             </div>
-
-                            {/* LAYER HEIGHT + COLOR */}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -605,8 +576,6 @@ export default function ClientOrder() {
                                 </div>
                             </div>
 
-                            {/* WALL THICKNESS + QUANTITY */}
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                                 <div>
@@ -682,8 +651,6 @@ export default function ClientOrder() {
                                 </div>
                             </div>
 
-                            {/* NOTES */}
-
                             <div>
                                 <label className="block text-sm font-semibold mb-2">
                                     Catatan Khusus (Opsional)
@@ -706,8 +673,6 @@ export default function ClientOrder() {
                                 />
                             </div>
 
-                            {/* SLICE BUTTON */}
-
                             <button
                                 type="button"
                                 onClick={
@@ -724,8 +689,6 @@ export default function ClientOrder() {
                                     : "Slice Model"}
                             </button>
 
-                            {/* SLICING RESULT */}
-
                             {sliceResult && (
                                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
 
@@ -739,29 +702,52 @@ export default function ClientOrder() {
                                             {sliceResult
                                                 .pricing
                                                 .totalPrice
-                                                .toLocaleString(
-                                                    "id-ID"
-                                                )}
+                                                .toLocaleString("id-ID")}
                                         </span>
                                     </div>
 
-                                    <div className="mt-2 flex justify-between items-center">
+                                    <div className="mt-5 pt-5 border-t border-amber-200">
+
+                                        <p className="text-sm font-semibold text-amber-900 text-center">
+                                            Pembayaran via QRIS
+                                        </p>
+
+                                        <p className="text-xs text-amber-700 text-center mt-1">
+                                            Scan QRIS berikut untuk melakukan pembayaran
+                                        </p>
+
+                                        <div className="mt-4 flex justify-center">
+                                            <div className="bg-white p-3 rounded-xl shadow-sm">
+                                                <Image
+                                                    src="/qris.png"
+                                                    alt="QRIS Pembayaran"
+                                                    width={220}
+                                                    height={220}
+                                                    className="w-[220px] h-[220px] object-contain"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-amber-700 text-center mt-3">
+                                            Setelah melakukan pembayaran, klik{" "}
+                                            <span className="font-semibold">
+                                                Place Order
+                                            </span>
+                                            .
+                                        </p>
+                                    </div>
+
+                                    <div className="mt-5 pt-3 border-t border-amber-200 flex justify-between items-center">
                                         <span className="text-xs text-amber-700">
                                             Estimasi Filament
                                         </span>
 
                                         <span className="font-semibold text-amber-800 text-xs">
-                                            {
-                                                sliceResult
-                                                    .filamentUsedGrams
-                                            }{" "}
-                                            g
+                                            {sliceResult.filamentUsedGrams} g
                                         </span>
                                     </div>
                                 </div>
                             )}
-
-                            {/* PLACE ORDER */}
 
                             <button
                                 type="button"
