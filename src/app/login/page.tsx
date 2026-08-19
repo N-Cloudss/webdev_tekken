@@ -29,9 +29,14 @@ export default function LoginPage() {
                 setLoading(true);
                 setError("");
     
-                await login(email, password);
+                const result = await login(email, password);
+
+                if (result.user.email === "admin123@gmail.com") {
+                    router.push("/admin");
+                } else {
+                    router.push("/client");
+                }
     
-                router.push("/");
             } catch (err: any) {
                 switch (err.code) {
                     case "auth/invalid-credential":
